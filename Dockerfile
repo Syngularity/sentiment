@@ -1,15 +1,20 @@
-FROM --platform=linux/amd64 python:3.9
-
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+FROM golang:1.24.4 AS builder
 
 WORKDIR /app
 
-COPY src/requirements.txt /app/
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+COPY . .
 
-COPY . /app/
+RUN CGO_ENABLED=0 GOOS=linux go build -o app .
 
-CMD ["python", "src/sentiment.py"]
+FROM alpine:latest 
+
+WORKDIR /app
+
+COPY --from=builder /app/app /app/app
+COPY --from=builder /app/templates /app/templates
+COPY --from=builder /app/static /app/static
+
+ENTRYPOINT ["/app/app"]

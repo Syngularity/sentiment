@@ -21,8 +21,11 @@
             font-style: italic;
             white-space: pre-wrap;
             word-wrap: break-word;
+            text-align: left;
+            max-width: 800px;
+            padding: 1rem;
         }
-        .round-logo {
+       .round-logo {
             width: 150px;
             height: 150px;
             border-radius: 50%;
@@ -85,24 +88,46 @@
     <div class="round-logo">
         <img src="/static/marketman.png" alt="Logo">
     </div>
-    <h1>Market Sentiment Analysis {{ ticker }}</h1>
-    <pre class="ai-text">{{ ai_text }}</pre>
-
+    <h1>Market Sentiment Analysis {{ .Ticker }}</h1>
+    <div class="ai-text"></div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        // Poll every 200ms until .ai-text has non-empty content
-        function checkIfContentReady() {
-            const textBlock = document.querySelector('.ai-text');
-            if (textBlock && textBlock.innerText.trim().length > 0) {
-                document.getElementById('loading').style.display = 'none';
-            } else {
-                setTimeout(checkIfContentReady, 200);
-            }
-        }
+        const ticker = "{{.Ticker}}";
 
-        // Start checking after DOM content is parsed
-        document.addEventListener('DOMContentLoaded', function() {
-            checkIfContentReady();
-        });
+        const aiText = document.querySelector('.ai-text');
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+
+        const source = new EventSource(`/sse/${encodeURIComponent(ticker)}`);
+
+        let markdownBuffer = "";
+        source.onmessage = function(event) {
+            loading.style.display = 'none';
+            const data = event.data;
+
+            if (data === '[DONE]') {
+                source.close();
+                return;
+            }
+
+            if (data.startsWith('[ERROR]')) {
+                loading.style.display = 'none';
+                errorDiv.style.display = 'block';
+                errorDiv.innerText = data.replace('[ERROR] ', '');
+                source.close();
+                return;
+            }
+
+            markdownBuffer += data;
+            aiText.innerHTML = marked.parse(markdownBuffer);
+        };
+
+        source.onerror = function(err) {
+            loading.style.display = 'none';
+            errorDiv.style.display = 'block';
+            errorDiv.innerText = 'Connection error. Please refresh and try again.';
+            source.close();
+        };
     </script>
 </body>
 </html>
